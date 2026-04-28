@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Flight Finder",
+    "description": "Search and compare flights using live pricing data",
+    "frontend_port": 3001,
+    "backend_port": 3002,
+    "color": "#f97316",
+    "status": "active"
+  },
+  {
+    "name": "Prediction Market",
+    "description": "Browse and trade on prediction market outcomes",
+    "frontend_port": 3003,
+    "backend_port": 3004,
+    "color": "#6366f1",
+    "status": "active"
+  },
+  {
+    "name": "DJ Website",
+    "description": "DJ transitions management system with song and set tracking",
+    "frontend_port": 3005,
+    "backend_port": 3006,
+    "color": "#ec4899",
+    "status": "active"
+  }
+]

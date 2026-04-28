@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pi Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: #64748b;
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .card {
+      background: #1e2330;
+      border: 1px solid #2d3347;
+      border-radius: 12px;
+      padding: 1.5rem;
+      border-top: 3px solid var(--color);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+    }
+
+    .card p {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 1.25rem;
+    }
+
+    .links {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    .links a {
+      flex: 1;
+      text-align: center;
+      padding: 0.45rem 0.75rem;
+      border-radius: 7px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-decoration: none;
+      background: #2d3347;
+      color: #cbd5e1;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .links a:hover {
+      background: var(--color);
+      color: #fff;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 99px;
+      background: #16a34a22;
+      color: #4ade80;
+      margin-bottom: 0.75rem;
+    }
+
+    .error {
+      color: #f87171;
+      background: #7f1d1d33;
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pi Dashboard</h1>
+    <p>All running projects on this device</p>
+  </header>
+
+  <div class="grid" id="projects"></div>
+
+  <script>
+    const host = window.location.hostname;
+    const container = document.getElementById('projects');
+
+    fetch('/projects.json')
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(projects => {
+        projects.forEach(p => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.style.setProperty('--color', p.color);
+          card.innerHTML = `
+            ${p.status === 'active' ? '<span class="badge">active</span>' : ''}
+            <h2>${p.name}</h2>
+            <p>${p.description}</p>
+            <div class="links">
+              <a href="http://${host}:${p.frontend_port}" target="_blank">Frontend :${p.frontend_port}</a>
+              <a href="http://${host}:${p.backend_port}/docs" target="_blank">API Docs :${p.backend_port}</a>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      })
+      .catch(err => {
+        container.innerHTML = `<div class="error">Failed to load projects.json: ${err.message}</div>`;
+      });
+  </script>
+</body>
+</html>

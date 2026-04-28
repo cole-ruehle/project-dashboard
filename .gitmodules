@@ -1,0 +1,9 @@
+[submodule "projects/flight-finder"]
+	path = projects/flight-finder
+	url = https://github.com/cole-ruehle/flight-finder.git
+[submodule "projects/dj-website"]
+	path = projects/dj-website
+	url = https://github.com/cole-ruehle/dj-website.git
+[submodule "projects/prediction-market"]
+	path = projects/prediction-market
+	url = https://github.com/cole-ruehle/prediction-market.git

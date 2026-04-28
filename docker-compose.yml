@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+
+  # ── Dashboard ──────────────────────────────────────────
+  dashboard:
+    image: nginx:alpine
+    container_name: dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  # ── flight-finder ──────────────────────────────────────
+  flight-finder-frontend:
+    image: node:20-alpine
+    container_name: flight-finder-frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./projects/flight-finder/frontend:/app
+    ports:
+      - "3001:3001"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3001"
+
+  flight-finder-backend:
+    image: ghcr.io/astral-sh/uv:python3.12-alpine
+    container_name: flight-finder-backend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./projects/flight-finder:/app
+    ports:
+      - "3002:3002"
+    command: uv run uvicorn backend.main:app --host 0.0.0.0 --port 3002 --reload --reload-dir backend
+
+  # ── dj-website ─────────────────────────────────────────
+  dj-website-frontend:
+    image: node:20-alpine
+    container_name: dj-website-frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./projects/dj-website:/app
+    ports:
+      - "3005:3005"
+    command: sh -c "npm install && node server.js"
+    environment:
+      - PORT=3005
+
+  dj-website-backend:
+    image: ghcr.io/astral-sh/uv:python3.12-alpine
+    container_name: dj-website-backend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./projects/dj-website:/app
+    ports:
+      - "3006:3006"
+    command: uv run uvicorn app:app --host 0.0.0.0 --port 3006 --reload
+    env_file:
+      - ./projects/dj-website/.env
+
+  # ── prediction-market ──────────────────────────────────
+  prediction-market-frontend:
+    image: node:20-alpine
+    container_name: prediction-market-frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./projects/prediction-market/frontend:/app
+    ports:
+      - "3003:3003"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3003"
+
+  prediction-market-backend:
+    image: ghcr.io/astral-sh/uv:python3.12-alpine
+    container_name: prediction-market-backend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./projects/prediction-market:/app
+    ports:
+      - "3004:3004"
+    command: uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 3004 --reload --reload-dir backend
