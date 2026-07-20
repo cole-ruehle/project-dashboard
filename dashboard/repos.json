@@ -1,0 +1,34 @@
+[
+  {
+    "name": "flight-finder",
+    "label": "Flight Finder",
+    "description": "Search and compare flights using live pricing data",
+    "git_url": "https://github.com/cole-ruehle/flight-finder",
+    "port": 3001,
+    "color": "#f97316"
+  },
+  {
+    "name": "prediction-market",
+    "label": "Prediction Market",
+    "description": "Browse and trade on prediction market outcomes",
+    "git_url": "https://github.com/cole-ruehle/prediction-market",
+    "port": 3003,
+    "color": "#6366f1"
+  },
+  {
+    "name": "dj-website",
+    "label": "DJ Website",
+    "description": "DJ transitions management system with song and set tracking",
+    "git_url": "https://github.com/cole-ruehle/dj-website",
+    "port": 3005,
+    "color": "#ec4899"
+  },
+  {
+    "name": "personal-website",
+    "label": "Personal Website",
+    "description": "Cole Ruehle's personal website",
+    "git_url": "https://github.com/cole-ruehle/personal-website",
+    "port": 3007,
+    "color": "#0ea5e9"
+  }
+]

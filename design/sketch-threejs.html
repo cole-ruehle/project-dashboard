@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard — Three.js City</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { overflow: hidden; background: #87CEEB; font-family: system-ui, sans-serif; }
+canvas { display: block; }
+#ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+#title-card {
+  position: fixed; top: 20px; left: 20px;
+  background: rgba(15,17,23,0.88); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 14px 18px;
+}
+#title-card h1 { font-size: 15px; font-weight: 800; color: #f8fafc; }
+#title-card p  { font-size: 10px; color: #64748b; margin-top: 3px; }
+.label {
+  position: absolute;
+  background: rgba(15,17,23,0.88); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+  padding: 5px 10px; display: flex; align-items: center; gap: 7px;
+  pointer-events: none; white-space: nowrap;
+  transform: translate(-50%, -100%); margin-top: -12px;
+}
+.label span { font-size: 11px; font-weight: 700; color: #f1f5f9; }
+.label .dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+#legend {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: rgba(15,17,23,0.85); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+  padding: 10px 18px; display: flex; gap: 18px;
+}
+.li { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; }
+.ld { width: 8px; height: 8px; border-radius: 50%; }
+#hint { position: fixed; bottom: 20px; right: 20px; color: #475569; font-size: 11px; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="title-card"><h1>My Projects</h1><p>4 projects · run setup.py to refresh</p></div>
+  <div id="legend">
+    <div class="li"><div class="ld" style="background:#4ade80"></div>Running</div>
+    <div class="li"><div class="ld" style="background:#fb923c"></div>No Dockerfile</div>
+    <div class="li"><div class="ld" style="background:#f87171"></div>Error</div>
+  </div>
+  <div id="hint">scroll to zoom · drag to pan</div>
+</div>
+
+<script src="three.min.js"></script>
+<script>
+const ERR = msg => {
+  const el = document.createElement('pre');
+  el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#900;color:#fff;padding:14px;z-index:9999;font-size:12px;white-space:pre-wrap;max-height:50vh;overflow:auto';
+  el.textContent = msg;
+  document.body.appendChild(el);
+};
+window.onerror = (msg,src,line,col,err) => { ERR(`LINE ${line}: ${msg}\n${err&&err.stack||''}`); return true; };
+window.onunhandledrejection = e => ERR('PROMISE: '+e.reason);
+if(typeof THREE==='undefined'){ ERR('three.min.js did not load'); throw 0; }
+try {
+
+// ── SEEDED RANDOM (deterministic city layout) ─────────────────────
+let _s = 54321;
+function rnd() { _s = (_s * 16807 + 0) % 2147483647; return (_s - 1) / 2147483646; }
+
+// ── SCENE ─────────────────────────────────────────────────────────
+const W = window.innerWidth, H = window.innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ECAE6);
+
+const VIEW = 36;
+const camera = new THREE.OrthographicCamera(
+  -VIEW*(W/H), VIEW*(W/H), VIEW, -VIEW, 0.1, 600
+);
+camera.position.set(60, 60, 60);
+camera.lookAt(8, 0, -5);
+camera.zoom = 0.95;
+camera.updateProjectionMatrix();
+
+// ── LIGHTING ──────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xCCDDFF, 1.1));
+const sun = new THREE.DirectionalLight(0xFFF5E0, 2.6);
+sun.position.set(40, 70, 30);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 300;
+sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
+sun.shadow.camera.top = 90; sun.shadow.camera.bottom = -90;
+sun.shadow.camera.updateProjectionMatrix();
+sun.shadow.bias = -0.001;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0xAABBFF, 0.5);
+fill.position.set(-30,25,-15); scene.add(fill);
+
+// ── MATERIALS ─────────────────────────────────────────────────────
+const M = hex => new THREE.MeshStandardMaterial({color:hex, roughness:0.82, metalness:0.06});
+const Mg = (hex,r,m) => new THREE.MeshStandardMaterial({color:hex, roughness:r, metalness:m});
+// Ground-layer materials use polygonOffset so each layer reliably renders on top of the one below,
+// preventing z-fighting / flashing when zooming.
+const Mf = (hex,r=0.82,m=0.06,f=0,u=0) => new THREE.MeshStandardMaterial(
+  {color:hex,roughness:r,metalness:m,polygonOffset:f!==0,polygonOffsetFactor:f,polygonOffsetUnits:u});
+
+const MAT = {
+  grass:   Mf(0x6DB855, 0.88, 0.02,  2,  2),   // base layer
+  road:    Mf(0xB0B0B0, 0.82, 0.06, -1, -1),   // on grass
+  sidewalk:Mf(0xD4CEC8, 0.82, 0.06, -1, -1),
+  tarmac:  Mf(0x7A818A, 0.95, 0.04, -1, -1),
+  rwy:     Mf(0x52555C, 0.95, 0.02, -1, -1),
+  marking: Mf(0xFFFFFF, 0.90, 0.00, -4, -4),   // on roads/rwy
+  yellow:  Mf(0xF0C030, 0.90, 0.00, -4, -4),
+  glass:   Mg(0xA8D8F0, 0.15, 0.4),
+  glassT:  new THREE.MeshStandardMaterial({color:0xBAE6FD,roughness:0.1,metalness:0.35,transparent:true,opacity:0.72}),
+  roofM:   Mg(0xCDD8DF, 0.45, 0.3),
+  // Project buildings
+  exTop:   M(0x8B5CF6), exSide: M(0x7C3AED), exDark: M(0x5B21B6), exCol: M(0xA78BFA),
+  clTop:   M(0xF9A8D4), clSide: M(0xEC4899), clDark: M(0xBE185D),
+  hmTop:   M(0xA7F3D0), hmSide: M(0x10B981), hmDark: M(0x059669), hmFence: M(0xD1D5DB),
+  twrS:    Mg(0x38BDF8, 0.38, 0.12), twrT: Mg(0xBAE6FD, 0.28, 0.2),
+  beacon:  Mg(0xEF4444, 0.3, 0.5),
+  chimney: M(0x9CA3AF), pier: Mg(0xC4D4DC, 0.6, 0.1),
+  // City filler arrays
+  officeA: [M(0xB0B8C8), M(0xA0ACBC), M(0xC2C8D2), M(0x8A98A8), Mg(0x9FAEBC,0.5,0.18)],
+  entert:  [M(0xD4B090), M(0xC89870), M(0xE0C898), M(0xB89068)],
+  resi:    [M(0xDDC8A8), M(0xCCB898), M(0xE8D4B4), M(0xB8C8A0), M(0xD4B8A0)],
+};
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function box(w,h,d,mat,x,y,z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true;
+  scene.add(m); return m;
+}
+function mbox(w,h,d,mats,x,y,z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mats);
+  m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true;
+  scene.add(m); return m;
+}
+function gnd(w,d,mat,x,z,y=0) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w,d), mat);
+  m.rotation.x=-Math.PI/2; m.position.set(x,y,z); m.receiveShadow=true;
+  scene.add(m); return m;
+}
+function tree(x,z,s=1) {
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14*s,0.18*s,1.1*s,6), M(0x7B5533));
+  trunk.position.set(x,0.55*s,z); trunk.castShadow=true; scene.add(trunk);
+  [[1.1*s, 2.0*s, 2.2*s],[0.75*s, 1.5*s, 3.2*s]].forEach(([r,h,cy])=>{
+    const f=new THREE.Mesh(new THREE.ConeGeometry(r,h,7), M(cy<2.5?0x348A34:0x4CAF4C));
+    f.position.set(x,cy*s,z); f.castShadow=true; scene.add(f);
+  });
+}
+
+// ── GROUND & ROADS ────────────────────────────────────────────────
+gnd(180, 180, MAT.grass, 0, 0);
+
+// City road grid: E-W at z=-20,0,20; N-S at x=-20,0,20
+[-20,0,20].forEach(z => gnd(180, 4, MAT.road, 0, z));
+[-20,0,20].forEach(x => gnd(4, 180, MAT.road, x, 0));
+
+// Outer boundary streets
+[-38,38].forEach(z => gnd(180, 3, MAT.road, 0, z));
+[-38,38].forEach(x => gnd(3, 180, MAT.road, x, 0));
+
+// Sidewalks flanking main roads
+[-20,0,20].forEach(z=>{
+  gnd(180,1.2,MAT.sidewalk,0,z+2.8); gnd(180,1.2,MAT.sidewalk,0,z-2.8);
+});
+[-20,0,20].forEach(x=>{
+  gnd(1.2,180,MAT.sidewalk,x+2.8,0); gnd(1.2,180,MAT.sidewalk,x-2.8,0);
+});
+
+// Road centre dashes
+for(let i=-85;i<86;i+=6){
+  gnd(3.5,0.14,MAT.marking,i,0);
+  gnd(0.14,3.5,MAT.marking,0,i);
+  gnd(2.5,0.12,MAT.marking,i,-20); gnd(2.5,0.12,MAT.marking,i,20);
+  gnd(0.12,2.5,MAT.marking,-20,i); gnd(0.12,2.5,MAT.marking,20,i);
+}
+
+// ── AIRPORT TARMAC & RUNWAYS ──────────────────────────────────────
+// Large apron: x 22→72, z -10→-28 (terminal area)
+gnd(50, 18, MAT.tarmac, 47, -19);
+// Extended apron between terminal and runways
+gnd(55, 8, MAT.tarmac, 49.5, -29);
+
+// RUNWAY A — z = -38 — runs E-W from x=22 to x=78
+gnd(56, 3.5, MAT.rwy, 50, -38);
+// Runway A markings
+for(let x=24;x<77;x+=4) gnd(2.8,0.18,MAT.marking,x,-38);
+gnd(2,3.5,MAT.marking,24,-38);   // threshold left
+gnd(2,3.5,MAT.marking,77,-38);   // threshold right
+
+// RUNWAY B — z = -47 — parallel to A
+gnd(56, 3.5, MAT.rwy, 50, -47);
+for(let x=24;x<77;x+=4) gnd(2.8,0.18,MAT.marking,x,-47);
+gnd(2,3.5,MAT.marking,24,-47);
+gnd(2,3.5,MAT.marking,77,-47);
+
+// Taxiways connecting terminal to runways
+gnd(2.5, 28, MAT.tarmac, 32, -34);  // taxiway A
+gnd(2.5, 28, MAT.tarmac, 50, -34);  // taxiway B
+// Taxiway centrelines
+for(let z=-21;z>-50;z-=5){ gnd(0.18,3.2,MAT.yellow,32,z); gnd(0.18,3.2,MAT.yellow,50,z); }
+
+// ── TREES ─────────────────────────────────────────────────────────
+// Along city streets
+[[-28,-9],[-28,9],[-28,-25],[-14,-25],[-14,25],[4,-25],[4,25]].forEach(([x,z])=>tree(x,z,0.75));
+[[-25,4],[-25,-4],[-25,22],[-25,-22],[-12,22],[-12,-22],[4,22],[4,-22]].forEach(([x,z])=>tree(x,z,0.7));
+// City parks / plazas
+[[-30,0],[0,30],[0,-30]].forEach(([x,z])=>{ for(let d=-4;d<=4;d+=4) tree(x+d,z,0.8); });
+// SE residential park
+[[16,26],[20,30],[24,26],[16,34],[24,34]].forEach(([x,z])=>tree(x,z,0.85));
+// Airport perimeter
+[[22,-53],[28,-53],[36,-53],[44,-53],[52,-53],[60,-53]].forEach(([x,z])=>tree(x,z,0.7));
+
+// ── CITY FILLER BUILDINGS ─────────────────────────────────────────
+// Each city quadrant filled with grid of buildings around the project buildings
+function fillQuadrant(cx, cz, cols, rows, step, hMin, hMax, mats, clearCx, clearCz, clearR) {
+  for (let c=0; c<cols; c++) {
+    for (let r=0; r<rows; r++) {
+      const bx = cx - (cols-1)*step/2 + c*step;
+      const bz = cz - (rows-1)*step/2 + r*step;
+      if (Math.abs(bx-clearCx) < clearR && Math.abs(bz-clearCz) < clearR) continue;
+      const bw = step*0.65 + rnd()*step*0.2;
+      const bd = step*0.65 + rnd()*step*0.2;
+      const bh = hMin + rnd()*(hMax-hMin);
+      box(bw,bh,bd, mats[Math.floor(rnd()*mats.length)], bx,bh/2,bz);
+    }
+  }
+}
+
+// NW financial district (around Exchange at -10,-10)
+fillQuadrant(-10,-10, 4,4, 6, 4,16, MAT.officeA, -10,-10, 7);
+// Extended NW blocks
+fillQuadrant(-29,-10, 3,4, 6, 5,14, MAT.officeA, 999,999,0);
+fillQuadrant(-10,-29, 4,3, 6, 4,12, MAT.officeA, 999,999,0);
+fillQuadrant(-29,-29, 3,3, 6, 4,10, MAT.officeA, 999,999,0);
+
+// SW entertainment district (around DJ Club at -10,10)
+fillQuadrant(-10,10, 4,4, 6, 3,9,  MAT.entert, -10,10, 7);
+fillQuadrant(-29,10, 3,4, 6, 2,8,  MAT.entert, 999,999,0);
+fillQuadrant(-10,29, 4,3, 6, 2,7,  MAT.resi,   999,999,0);
+fillQuadrant(-29,29, 3,3, 6, 2,6,  MAT.resi,   999,999,0);
+
+// SE residential (around Home at 10,10)
+fillQuadrant(10,10, 4,4, 5, 2,5,   MAT.resi,   10,10, 7);
+fillQuadrant(10,29, 4,3, 5, 2,4,   MAT.resi,   999,999,0);
+
+// City blocks along north edge (NE area before airport)
+fillQuadrant(-10,-29,4,2,6,3,10, MAT.officeA, 999,999,0);
+
+// ── 1. PREDICTION MARKET — Exchange (NW) ─────────────────────────
+{
+  mbox(7,10,5, [MAT.exSide,MAT.exDark,MAT.exTop,MAT.exDark,MAT.exSide,MAT.exDark], -10,5,-10);
+  for(let i=-2.4;i<=2.4;i+=1.6) box(0.4,8,0.4,MAT.exCol, -10+i,4,-7.35);
+  box(7.6,0.45,0.45, Mg(0xDDD6FE,0.8), -10,10.2,-7.35);  // pediment base
+  box(7.5,0.35,1.5,  Mg(0xC4B5FD,0.9), -10,0.18,-6.5);   // steps
+  box(6.8,0.35,1.0,  Mg(0xC4B5FD,0.9), -10,0.55,-7.0);
+}
+
+// ── 2. DJ WEBSITE — Music Hall (SW) ──────────────────────────────
+{
+  mbox(7,10,5, [MAT.clDark,MAT.clDark,MAT.clTop,MAT.clDark,MAT.clSide,MAT.clDark], -10,5,10);
+  box(7.6,0.5,1.3, Mg(0xF472B6,0.7), -10,5.9,7.85);       // marquee
+  box(2.0,3.2,0.2, Mg(0x831843,0.9), -10,1.6,7.45);        // door
+  box(3.8,0.9,0.18,Mg(0xFB7185,0.5,0.1), -10,5.9,7.47);   // sign panel
+}
+
+// ── 3. PERSONAL WEBSITE — Home (SE) ──────────────────────────────
+{
+  mbox(7,7,5, [MAT.hmDark,MAT.hmDark,MAT.hmTop,MAT.hmDark,MAT.hmSide,MAT.hmDark], 10,3.5,10);
+  box(0.9,2.5,0.9, MAT.chimney, 12,7.5,9);
+  box(1.6,2.8,0.2, Mg(0x065F46,0.9), 10,1.4,7.45);        // door
+  box(7.8,0.35,5.8,Mg(0x6EE7B7,0.7), 10,7.18,10);         // roof accent
+  // Garden fence
+  for(let i=-3;i<=3;i+=1.5) box(0.18,1,0.18,MAT.hmFence, 10+i,0.5,7.2);
+  box(6.4,0.18,0.18,MAT.hmFence, 10,0.9,7.2);
+}
+
+// ── 4. FLIGHT FINDER — Airport (NE) ──────────────────────────────
+{
+  // MAIN TERMINAL — wide, low, glass-steel, barrel-vault roof
+  // x=22→56 (34 wide), z=-14→-22 (8 deep), h=5
+  mbox(34,5,8,
+    [Mg(0xCDD8DE,0.55,0.1), Mg(0xC0CCD4,0.55,0.1), MAT.roofM,
+     Mg(0xB8C8D0,0.55,0.1), Mg(0xD4E0E6,0.55,0.1), Mg(0xBECCD4,0.55,0.1)],
+    39, 2.5, -18);
+
+  // Barrel-vault arches (6 sections, full width of terminal)
+  for(let i=0;i<6;i++){
+    const vGeo = new THREE.CylinderGeometry(2.4,2.4,5.6,18,1,false, Math.PI*0.85, Math.PI*1.3);
+    const v = new THREE.Mesh(vGeo, MAT.roofM);
+    v.position.set(22 + i*5.7, 6.0, -18);
+    v.rotation.z = Math.PI/2; v.castShadow=true;
+    scene.add(v);
+  }
+
+  // Glass curtain wall lower half (south face)
+  box(34,2.8,0.3, MAT.glassT, 39,1.4,-13.85);
+
+  // Entrance canopy
+  box(8,0.35,3.5, Mg(0x5B9FC4,0.4,0.25), 33,5.6,-13.6);
+  [[29,5.6,-14.4],[37,5.6,-14.4]].forEach(([x,y,z])=>box(0.28,5.6,0.28, Mg(0x94A3B8,0.7), x,y/2,z));
+
+  // GATE PIERS (4 piers, extending south from terminal)
+  [24,32,40,48].forEach(px=>{
+    box(5,3.5,10, MAT.pier, px,1.75,-8);
+    box(5,2.5,0.3,MAT.glassT, px,1.25,-2.85); // glass south face
+  });
+
+  // Connecting bridge between terminal and piers
+  box(34,2,1.5, Mg(0xC8D4DA,0.6,0.1), 39,3.5,-13.2);
+
+  // AIRCRAFT at gates (top-down cross shapes)
+  [24,32,40,48].forEach(px=>{
+    box(1,0.22,11, Mg(0xF0F4F8,0.55), px,0.11,-4);   // fuselage
+    box(16,0.22,0.9,Mg(0xF0F4F8,0.55), px,0.11,-4);  // wings
+    box(4,0.18,0.7, Mg(0xE8ECF0,0.6), px,0.09,-9.2);// tail
+  });
+
+  // CONTROL TOWER
+  box(2.2,26,2.2, MAT.twrS, 62,13,-14);
+  box(5.5,1.4,5.5,Mg(0x7DD3FC,0.28,0.22), 62,26.7,-14);  // obs deck
+  box(2.2,1.2,2.2,MAT.twrT, 62,28,-14);
+  new THREE.Mesh(new THREE.SphereGeometry(0.35,8,8), MAT.beacon)
+    .position.set(62,28.8,-14), scene.add(Object.assign(
+      new THREE.Mesh(new THREE.SphereGeometry(0.35,8,8), MAT.beacon), {castShadow:true}));
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.35,8,8), MAT.beacon);
+  b.position.set(62,28.8,-14); b.castShadow=true; scene.add(b);
+
+  // RUNWAY AIRCRAFT (taxiing)
+  [[36,-34.5],[50,-47]].forEach(([rx,rz])=>{
+    box(0.9,0.25,11,Mg(0xF0F4F8,0.55), rx,0.14,rz);
+    box(15,0.25,0.9,Mg(0xF0F4F8,0.55), rx,0.14,rz);
+  });
+}
+
+// ── LABELS ────────────────────────────────────────────────────────
+const PROJECTS = [
+  {pos: new THREE.Vector3(-10,13,-10), name:'Prediction Market', color:'#fb923c'},
+  {pos: new THREE.Vector3(-10,13, 10), name:'DJ Website',        color:'#fb923c'},
+  {pos: new THREE.Vector3( 39,10,-16), name:'Flight Finder',     color:'#fb923c'},
+  {pos: new THREE.Vector3( 10,10, 10), name:'Personal Website',  color:'#fb923c'},
+];
+
+const labelEls = PROJECTS.map(p => {
+  const el = document.createElement('div');
+  el.className = 'label';
+  el.innerHTML = `<div class="dot" style="background:${p.color}"></div><span>${p.name}</span>`;
+  document.getElementById('ui').appendChild(el);
+  return el;
+});
+
+// ── CAMERA CONTROLS ───────────────────────────────────────────────
+let drag=false, lx=0, lz=0, panX=8, panZ=-5;
+renderer.domElement.addEventListener('mousedown', e=>{drag=true; lx=e.clientX; lz=e.clientY;});
+window.addEventListener('mouseup', ()=>drag=false);
+window.addEventListener('mousemove', e=>{
+  if(!drag) return;
+  panX -= (e.clientX-lx)*0.07; panZ -= (e.clientY-lz)*0.07;
+  lx=e.clientX; lz=e.clientY;
+});
+renderer.domElement.addEventListener('wheel', e=>{
+  e.preventDefault();
+  camera.zoom = Math.max(0.25, Math.min(4, camera.zoom - e.deltaY*0.0008));
+  camera.updateProjectionMatrix();
+  // Render immediately so the zoom frame is never stale
+  camera.position.set(60+panX, 60, 60+panZ);
+  camera.lookAt(panX, 0, panZ);
+  renderer.render(scene, camera);
+},{passive:false});
+window.addEventListener('resize',()=>{
+  const w=window.innerWidth, h=window.innerHeight;
+  renderer.setSize(w,h);
+  camera.left=-VIEW*(w/h); camera.right=VIEW*(w/h);
+  camera.updateProjectionMatrix();
+});
+
+// ── RENDER LOOP ───────────────────────────────────────────────────
+const _v = new THREE.Vector3();
+function toScreen(pos){
+  _v.copy(pos).project(camera);
+  return {x:(_v.x+1)/2*window.innerWidth, y:(-_v.y+1)/2*window.innerHeight};
+}
+(function animate(){
+  requestAnimationFrame(animate);
+  try {
+    camera.position.set(60+panX, 60, 60+panZ);
+    camera.lookAt(panX, 0, panZ);
+    renderer.render(scene, camera);
+    PROJECTS.forEach((p,i)=>{
+      const s=toScreen(p.pos);
+      labelEls[i].style.left=s.x+'px';
+      labelEls[i].style.top=s.y+'px';
+    });
+  } catch(e) { ERR('ANIMATE: '+e+'\n'+e.stack); }
+})();
+} catch(e) { ERR('SETUP: '+e+'\n'+e.stack); }
+</script>
+</body>
+</html>

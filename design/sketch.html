@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard — City Map Sketch v2</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0f1117;
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 2rem; gap: 1rem;
+  font-family: system-ui, sans-serif; color: #e2e8f0;
+}
+h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
+.sub { color: #64748b; font-size: 0.85rem; margin-top: 0.25rem; }
+svg { border-radius: 16px; max-width: 1100px; width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,0.55); }
+.legend { display: flex; gap: 1.5rem; font-size: 0.8rem; color: #94a3b8; flex-wrap: wrap; justify-content: center; }
+.legend span { display: flex; align-items: center; gap: 0.5rem; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<h1>Project Dashboard — City Map</h1>
+<p class="sub">v2 — Full map · Oslo Airport terminal · open in browser to preview</p>
+
+<svg viewBox="0 0 1100 640" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#4FA8D8"/>
+    <stop offset="55%"  stop-color="#A8D8F0"/>
+    <stop offset="100%" stop-color="#D9EFFC"/>
+  </linearGradient>
+  <filter id="bldShadow" x="-15%" y="-20%" width="145%" height="165%">
+    <feDropShadow dx="4" dy="8" stdDeviation="5" flood-color="#00000044"/>
+  </filter>
+</defs>
+<rect width="1100" height="640" fill="url(#sky)"/>
+</svg>
+
+<div class="legend">
+  <span><span class="dot" style="background:#4ade80"></span> Running</span>
+  <span><span class="dot" style="background:#fb923c"></span> No Dockerfile</span>
+  <span><span class="dot" style="background:#f87171"></span> Error</span>
+</div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.querySelector('svg');
+
+// Isometric params
+const OX=490, OY=188, TW=40, TH=20, FH=28;
+function pt(e,n,u=0){ return [OX+(e-n)*TW, OY+(e+n)*TH-u*FH]; }
+
+function add(tag,attrs,parent=svg){
+  const el=document.createElementNS(NS,tag);
+  Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
+  parent.appendChild(el);
+  return el;
+}
+function poly(pts,fill,stroke='#2c2c2c',sw=1.8,parent=svg){
+  return add('polygon',{
+    points:pts.map(p=>p.join(',')).join(' '),
+    fill,stroke,'stroke-width':sw,'stroke-linejoin':'round'
+  },parent);
+}
+function ln(x1,y1,x2,y2,stroke,sw=1.5,dash='',parent=svg){
+  const a={x1,y1,x2,y2,stroke,'stroke-width':sw};
+  if(dash) a['stroke-dasharray']=dash;
+  return add('line',a,parent);
+}
+
+// ── ATMOSPHERE ────────────────────────────────────────────────────
+add('circle',{cx:1042,cy:46,r:36,fill:'#FFE04A',opacity:'0.9'});
+add('circle',{cx:1042,cy:46,r:26,fill:'#FFD020'});
+[[120,52,1],[660,38,0.82],[390,24,0.65],[260,68,0.55]].forEach(([cx,cy,s])=>{
+  const g=add('g',{opacity:'0.82'});
+  [[0,0,42,17],[-28,-9,28,14],[30,-7,26,12],[8,9,20,8]].forEach(([dx,dy,rx,ry])=>{
+    add('ellipse',{cx:cx+dx*s,cy:cy+dy*s,rx:rx*s,ry:ry*s,fill:'white'},g);
+  });
+});
+
+// ── GROUND TILES (painter's order: ascending e+n) ─────────────────
+const COLS=13, ROWS=9;
+const tiles=[];
+for(let e=0;e<COLS;e++) for(let n=0;n<ROWS;n++) tiles.push([e,n]);
+tiles.sort((a,b)=>(a[0]+a[1])-(b[0]+b[1]));
+
+tiles.forEach(([e,n])=>{
+  const isRoadN = n===4;
+  const isRoadE = e===5;
+  const isTarmac = e>=6 && n<=3;   // airport apron
+  let color;
+  if(isRoadN||isRoadE) color='#C0C0C0';
+  else if(isTarmac) color='#9AA4AE';
+  else color=(e+n)%2===0?'#7DC765':'#6DB855';
+  poly([pt(e,n),pt(e+1,n),pt(e+1,n+1),pt(e,n+1)],color,'#00000010',0.5);
+});
+
+// Tarmac taxiway centrelines (yellow)
+[[8,1.5,9,1.5],[10,1.5,11,1.5],[8,1.5,8,4],[10,1.5,10,4]].forEach(([e1,n1,e2,n2])=>{
+  const[x1,y1]=pt(e1,n1),[x2,y2]=pt(e2,n2);
+  ln(x1,y1,x2,y2,'#E8C840',1.2,'8,5');
+});
+
+// Road centre dashes
+for(let e=0;e<COLS;e++){
+  const[x1,y1]=pt(e,4.5),[x2,y2]=pt(e+1,4.5);
+  ln(x1,y1,x2,y2,'white',1.5,'7,7');
+}
+for(let n=0;n<ROWS;n++){
+  const[x1,y1]=pt(5.5,n),[x2,y2]=pt(5.5,n+1);
+  ln(x1,y1,x2,y2,'white',1.5,'7,7');
+}
+
+// ── TREES ────────────────────────────────────────────────────────
+function tree(e,n,s=1){
+  const[bx,by]=pt(e,n);
+  add('rect',{x:bx-2*s,y:by-9*s,width:4*s,height:10*s,fill:'#7B5533','stroke-width':0});
+  add('ellipse',{cx:bx,cy:by-20*s,rx:12*s,ry:10*s,fill:'#348A34',stroke:'#1E6B1E','stroke-width':1});
+  add('ellipse',{cx:bx,cy:by-28*s,rx:8*s,ry:6*s,fill:'#4CAF4C'});
+}
+// Residential park (SE)
+[[0.5,5.5],[1.5,6.5],[3.5,5.5],[2.5,7.5],[0.5,7.5],[1,8],[3,8]].forEach(t=>tree(...t));
+// City street trees (NW)
+[[3.8,0.4],[0.4,2.1],[4.5,2.3]].forEach(t=>tree(...t,0.8));
+// Airport perimeter trees
+[[6,4.5],[6.5,4.8],[7,4.5],[12,4.5],[12.5,4.8]].forEach(t=>tree(...t,0.75));
+
+// ── BUILDING HELPERS ─────────────────────────────────────────────
+function box(e,n,w,d,h,topC,southC,eastC,parent=svg){
+  poly([pt(e+w,n,0),pt(e+w,n+d,0),pt(e+w,n+d,h),pt(e+w,n,h)],eastC,'#2c2c2c',1.8,parent);
+  poly([pt(e,n,0),pt(e+w,n,0),pt(e+w,n,h),pt(e,n,h)],southC,'#2c2c2c',1.8,parent);
+  poly([pt(e,n,h),pt(e+w,n,h),pt(e+w,n+d,h),pt(e,n+d,h)],topC,'#2c2c2c',1.8,parent);
+}
+function winS(e,n,w,cols,rows,hTotal,parent){
+  const ww=0.2,wh=0.38;
+  for(let c=0;c<cols;c++){
+    const we=e+0.3+c*((w-0.45)/Math.max(cols-0.1,1));
+    for(let r=0;r<rows;r++){
+      const wu=0.36+r*((hTotal-0.65)/Math.max(rows,1));
+      poly([pt(we,n,wu),pt(we+ww,n,wu),pt(we+ww,n,wu+wh),pt(we,n,wu+wh)],'#FFFCE0','#C4A800',0.7,parent);
+    }
+  }
+}
+
+// ── BUILDINGS (ascending e+n = farthest first) ────────────────────
+
+// 1. PREDICTION MARKET — Classical Exchange (e=0,n=0, sum=0)
+{
+  const g=add('g',{filter:'url(#bldShadow)'});
+  box(0,0,3,2,4,'#C4B5FD','#8B5CF6','#6D28D9',g);
+  [0.32,1.05,1.78,2.51].forEach(ce=>{
+    poly([pt(ce,0,.05),pt(ce+.16,0,.05),pt(ce+.16,0,3.65),pt(ce,0,3.65)],'#A78BFA','#5B21B6',1.2,g);
+  });
+  poly([pt(0,0,3.78),pt(3,0,3.78),pt(1.5,0,4.62)],'#DDD6FE','#7C3AED',1.6,g);
+  winS(0,0,3,3,2,3.6,g);
+  poly([pt(-.05,0,0),pt(3.05,0,0),pt(3.05,0,.22),pt(-.05,0,.22)],'#9333EA','#5B21B6',1,g);
+}
+
+// 2. City filler (NW district — generic office blocks)
+[[3.5,.5,1.4,1.4,2.8,'#BABAC8','#9898AC','#7878A0'],
+ [3.5,2,1.2,1.0,2.2,'#C0C0CC','#A0A0B8','#8080A8'],
+ [1,2.5,2,.8,1.6,'#B8C0C8','#9EA8B4','#808C9C']
+].forEach(([e,n,w,d,h,t,s,ea])=>box(e,n,w,d,h,t,s,ea));
+
+// 3. DJ WEBSITE — Music Hall (e=0,n=5, sum=5)
+{
+  const g=add('g',{filter:'url(#bldShadow)'});
+  box(0,5,3,2,4,'#F9A8D4','#EC4899','#BE185D',g);
+  winS(0,5,3,3,2,4,g);
+  poly([pt(-.05,5,2.28),pt(3.05,5,2.28),pt(3.05,5,2.66),pt(-.05,5,2.66)],'#F472B6','#BE185D',1.2,g);
+  const apts=[];
+  for(let i=0;i<=10;i++){
+    const a=(Math.PI*i)/10;
+    apts.push(pt(1.275+Math.cos(Math.PI-a)*.18,5,.88+Math.sin(a)*.32));
+  }
+  apts.push(pt(1.455,5,0),pt(1.095,5,0));
+  poly(apts,'#831843','#BE185D',1,g);
+  const[sx,sy]=pt(1.5,5,2.48);
+  add('text',{x:sx,y:sy,'font-size':8,'font-weight':'800',fill:'white','text-anchor':'middle',
+    'dominant-baseline':'middle','font-family':'system-ui'},g).textContent='♪ LIVE ♪';
+}
+
+// 4. AIRPORT TERMINAL — Flight Finder (e=6,n=0, sum=6)
+// Style: long terminal, repeating barrel-vault roof, glass curtain wall
+{
+  const g=add('g',{filter:'url(#bldShadow)'});
+  const te=6,tn=0,tw=6,td=2,th=2;
+
+  // East face
+  poly([pt(te+tw,tn,0),pt(te+tw,tn+td,0),pt(te+tw,tn+td,th),pt(te+tw,tn,th)],
+    '#C4D0D8','#1F2937',1.8,g);
+
+  // Top face — flat roof deck with ridge lines suggesting OSL vault structure
+  poly([pt(te,tn,th),pt(te+tw,tn,th),pt(te+tw,tn+td,th),pt(te,tn+td,th)],
+    '#D8E6EC','#1F2937',1.8,g);
+  // Vault ridge lines on roof (visible from above)
+  for(let v=1;v<4;v++){
+    const ev=te+v*(tw/4);
+    const[x1,y1]=pt(ev,tn,th),[x2,y2]=pt(ev,tn+td,th);
+    ln(x1,y1,x2,y2,'#A8B8C4',1.2,'',g);
+  }
+
+  // SOUTH FACE — the iconic OSL arched/barrel-vault profile
+  // 4 repeating arch sections across the 6-tile terminal width
+  const sf=[pt(te,tn,0), pt(te+tw,tn,0), pt(te+tw,tn,th)];
+  const steps=72;
+  for(let step=0;step<=steps;step++){
+    const t=step/steps;                        // 0=right(e=12) → 1=left(e=6)
+    const e=(te+tw)-t*tw;                      // 12 → 6
+    const walked=t*4;                          // 0 → 4 vaults
+    const vaultPhase=walked%1;
+    const archU=th+0.72*Math.sin(Math.PI*vaultPhase);
+    sf.push(pt(e,tn,archU));
+  }
+  sf.push(pt(te,tn,th));
+  poly(sf,'#DCE8EE','#1F2937',2,g);
+
+  // Glass curtain wall band across lower south face
+  const glass=poly([pt(te,tn,.3),pt(te+tw,tn,.3),pt(te+tw,tn,1.5),pt(te,tn,1.5)],
+    '#BAE6FD','#4B9FCA',1.2,g);
+  glass.setAttribute('opacity','0.7');
+
+  // Entrance canopy (centre of south face)
+  poly([pt(te+tw/2-1.2,tn,0),pt(te+tw/2+1.2,tn,0),
+        pt(te+tw/2+1.2,tn,.55),pt(te+tw/2-1.2,tn,.55)],'#5B9FC4','#1F2937',1.5,g);
+
+  // Departures sign on facade
+  const[lx,ly]=pt(te+tw/2,tn,.95);
+  add('text',{x:lx,y:ly,'font-size':7,'font-weight':'700',fill:'#1F4E79',
+    'text-anchor':'middle','dominant-baseline':'middle','font-family':'system-ui',
+    'letter-spacing':'1'},g).textContent='DEPARTURES';
+}
+
+// 5. Gate Pier A (e=7.5,n=2, sum=9.5)
+{
+  const g=add('g',{filter:'url(#bldShadow)'});
+  box(7.5,2,1.5,2.5,1.5,'#D4DDE5','#B0C0CC','#8AAABE',g);
+  for(let i=0;i<3;i++){
+    const we=7.7+i*.44;
+    poly([pt(we,2,.2),pt(we+.26,2,.2),pt(we+.26,2,1.1),pt(we,2,1.1)],'#BAE6FD','#4B9FCA',.7,g);
+  }
+}
+
+// 6. Gate Pier B (e=10,n=2, sum=12)
+{
+  const g=add('g',{filter:'url(#bldShadow)'});
+  box(10,2,1.5,2.5,1.5,'#D4DDE5','#B0C0CC','#8AAABE',g);
+  for(let i=0;i<3;i++){
+    const we=10.2+i*.44;
+    poly([pt(we,2,.2),pt(we+.26,2,.2),pt(we+.26,2,1.1),pt(we,2,1.1)],'#BAE6FD','#4B9FCA',.7,g);
+  }
+}
+
+// 7. PERSONAL WEBSITE — Home (e=6,n=5, sum=11)
+{
+  const g=add('g',{filter:'url(#bldShadow)'});
+  box(6,5,3,2,3,'#A7F3D0','#10B981','#059669',g);
+  winS(6,5,3,2,2,3,g);
+  poly([pt(6.12,5,0),pt(6.42,5,0),pt(6.42,5,.92),pt(6.12,5,.92)],'#065F46','#022c22',1.2,g);
+  poly([pt(4.92,5,3),pt(9.08,5,3),pt(9.08,5,3.22),pt(4.92,5,3.22)],'#6EE7B7','#059669',1.2,g);
+  // Chimney
+  const[ce,cn,cb,cw,cd,ch]=[8.2,5,3,.36,.36,1.1];
+  poly([pt(ce+cw,cn,cb),pt(ce+cw,cn+cd,cb),pt(ce+cw,cn+cd,cb+ch),pt(ce+cw,cn,cb+ch)],'#9CA3AF','#4B5563',1.2,g);
+  poly([pt(ce,cn,cb),pt(ce+cw,cn,cb),pt(ce+cw,cn,cb+ch),pt(ce,cn,cb+ch)],'#6B7280','#4B5563',1.2,g);
+  poly([pt(ce,cn,cb+ch),pt(ce+cw,cn,cb+ch),pt(ce+cw,cn+cd,cb+ch),pt(ce,cn+cd,cb+ch)],'#9CA3AF','#4B5563',1.2,g);
+}
+
+// 8. Residential filler houses (SE)
+[[9.5,5.5,2,1.5,2,'#C8D4C0','#A8B8A0','#889880'],
+ [9.5,7,1.5,1.2,1.8,'#D0C8C0','#B0A8A0','#908080']
+].forEach(([e,n,w,d,h,t,s,ea])=>box(e,n,w,d,h,t,s,ea));
+
+// 9. CONTROL TOWER (e=12.2,n=0, sum=12.2) — draws after terminal
+{
+  const g=add('g',{filter:'url(#bldShadow)'});
+  box(12.2,0,.8,.8,8,'#BAE6FD','#38BDF8','#0284C7',g);
+  // Observation deck ring
+  poly([pt(11.9,0,6.5),pt(13.2,0,6.5),pt(13.2,0,7),pt(11.9,0,7)],'#E0F2FE','#0284C7',1.5,g);
+  poly([pt(13.2,0,6.5),pt(13.2,.8,6.5),pt(13.2,.8,7),pt(13.2,0,7)],'#BAE6FD','#0284C7',1.5,g);
+  poly([pt(11.9,0,7),pt(13.2,0,7),pt(13.2,.8,7),pt(11.9,.8,7)],'#E0F2FE','#0284C7',1.5,g);
+  // Red beacon
+  const[bx,by]=pt(12.6,.4,8.3);
+  add('circle',{cx:bx,cy:by,r:5,fill:'#EF4444',opacity:'0.92'});
+}
+
+// Aircraft shapes on tarmac (top-down view)
+[[8.75,3.2],[10.25,3.2]].forEach(([ae,an])=>{
+  poly([pt(ae-.05,an-.32),pt(ae+.05,an-.32),pt(ae+.05,an+.22),pt(ae-.05,an+.22)],'#F0F4F8','#9CA3AF',.8);
+  poly([pt(ae-.42,an+.02),pt(ae+.42,an+.02),pt(ae+.42,an-.06),pt(ae-.42,an-.06)],'#F0F4F8','#9CA3AF',.8);
+  poly([pt(ae-.14,an+.16),pt(ae+.14,an+.16),pt(ae+.14,an+.22),pt(ae-.14,an+.22)],'#E5E7EB','#9CA3AF',.7);
+});
+
+// ── LABELS (always on top) ───────────────────────────────────────
+[
+  {e:1.5, n:1,  h:4.8, text:'Prediction Market', status:'no_dockerfile'},
+  {e:1.5, n:6,  h:4.8, text:'DJ Website',        status:'no_dockerfile'},
+  {e:9,   n:0,  h:3.6, text:'Flight Finder',      status:'no_dockerfile'},
+  {e:7.5, n:6,  h:3.8, text:'Personal Website',   status:'no_dockerfile'},
+].forEach(({e,n,h,text,status})=>{
+  const[lx,ly]=pt(e,n,h);
+  const[bx,by]=pt(e,n,h-.6);
+  const dc={running:'#4ade80',no_dockerfile:'#fb923c',error:'#f87171'};
+  const w=text.length*6.6+26;
+  const g=add('g',{});
+  ln(lx,ly+7,bx,by,'#1e293b',1.4,'',g);
+  add('rect',{x:lx-w/2,y:ly-15,width:w,height:23,rx:7,fill:'#1e293b',opacity:'0.92'},g);
+  add('text',{x:lx-w/2+10,y:ly-2,'font-family':'system-ui','font-size':11,'font-weight':'700',
+    fill:'#f1f5f9','dominant-baseline':'middle'},g).textContent=text;
+  add('circle',{cx:lx+w/2-12,cy:ly-4,r:5.5,fill:dc[status]||'#94a3b8',stroke:'white','stroke-width':1.3},g);
+});
+
+// Title card
+{
+  const g=add('g',{});
+  add('rect',{x:16,y:16,width:200,height:54,rx:10,fill:'#1e293b',opacity:'0.92'},g);
+  add('text',{x:28,y:37,'font-family':'system-ui','font-size':15,'font-weight':'800',fill:'#f8fafc'},g).textContent='My Projects';
+  add('text',{x:28,y:56,'font-family':'system-ui','font-size':10,fill:'#64748b'},g).textContent='4 projects · run setup.py to refresh';
+}
+</script>
+</body>
+</html>
