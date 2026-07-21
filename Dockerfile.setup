@@ -1,0 +1,4 @@
+FROM python:3.12-alpine
+RUN apk add --no-cache git docker-cli docker-compose
+WORKDIR /workspace
+CMD ["python3", "setup.py"]

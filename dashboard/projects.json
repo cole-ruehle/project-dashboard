@@ -1,1 +1,49 @@
-[]
+[
+  {
+    "name": "flight-finder",
+    "label": "Flight Finder",
+    "description": "Search and compare flights using live pricing data",
+    "git_url": "https://github.com/cole-ruehle/flight-finder",
+    "port": 3001,
+    "db_port": 5433,
+    "color": "#f97316",
+    "status": "running"
+  },
+  {
+    "name": "prediction-market",
+    "label": "Prediction Market",
+    "description": "Browse and trade on prediction market outcomes",
+    "git_url": "https://github.com/cole-ruehle/prediction-market",
+    "port": 3003,
+    "db_port": 5434,
+    "color": "#6366f1",
+    "status": "build_failed"
+  },
+  {
+    "name": "dj-website",
+    "label": "DJ Website",
+    "description": "DJ transitions management system with song and set tracking",
+    "git_url": "https://github.com/cole-ruehle/dj-website",
+    "port": 3005,
+    "color": "#ec4899",
+    "status": "no_compose_file"
+  },
+  {
+    "name": "personal-website",
+    "label": "Personal Website",
+    "description": "Cole Ruehle's personal website",
+    "git_url": "https://github.com/cole-ruehle/personal-website",
+    "port": 3007,
+    "color": "#0ea5e9",
+    "status": "running"
+  },
+  {
+    "name": "weather-aopp",
+    "label": "Weather Aopp",
+    "description": "Weather application with live data",
+    "git_url": "https://github.com/cole-ruehle/weather-app",
+    "port": 3009,
+    "color": "#34d399",
+    "status": "running"
+  }
+]
