@@ -106,6 +106,8 @@ def main():
         env = {**os.environ, "FRONTEND_PORT": str(port)}
         if repo.get("db_port"):
             env["DB_PORT"] = str(repo["db_port"])
+        if repo.get("backend_port"):
+            env["BACKEND_PORT"] = str(repo["backend_port"])
         returncode = stream(["docker-compose", "up", "-d", "--build"], cwd=project_dir, env=env)
         if returncode != 0:
             print(f"  Failed — see output above")

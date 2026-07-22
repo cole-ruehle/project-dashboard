@@ -6,6 +6,7 @@
     "git_url": "https://github.com/cole-ruehle/flight-finder",
     "port": 3001,
     "db_port": 5433,
+    "backend_port": 8001,
     "color": "#f97316"
   },
   {
