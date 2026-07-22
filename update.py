@@ -130,7 +130,7 @@ def main():
 
         # Bring down existing containers for this project only
         print("  Stopping existing containers...")
-        stream(["docker", "compose", "down"], cwd=project_dir)
+        stream(["docker-compose", "down"], cwd=project_dir)
 
         # Build + start
         print("  Building and starting...")
@@ -139,7 +139,7 @@ def main():
             env["DB_PORT"] = str(repo["db_port"])
         if repo.get("backend_port"):
             env["BACKEND_PORT"] = str(repo["backend_port"])
-        returncode = stream(["docker", "compose", "up", "-d", "--build"], cwd=project_dir, env=env)
+        returncode = stream(["docker-compose", "up", "-d", "--build"], cwd=project_dir, env=env)
 
         if returncode != 0:
             print("  Failed — see output above")
