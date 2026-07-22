@@ -32,6 +32,24 @@
     color: #86868b;
   }
 
+  #update-btn {
+    margin-top: 16px;
+    padding: 9px 22px;
+    background: #1d1d1f;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  #update-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
   #grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -114,6 +132,11 @@
   .dot-running  { background: #34c759; }
   .dot-stopped  { background: #c7c7cc; }
   .dot-error    { background: #ff3b30; }
+  .dot-updating { background: #ff9f0a; animation: pulse 1s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+  }
 
   .toast {
     position: fixed;
@@ -146,6 +169,7 @@
 <header>
   <h1>Projects</h1>
   <p id="subtitle">Loading...</p>
+  <button id="update-btn" onclick="triggerUpdate()">Update All</button>
 </header>
 
 <div id="grid"></div>
@@ -156,6 +180,7 @@ const host = window.location.hostname;
 
 const STATUS_LABEL = {
   running:         'Running',
+  updating:        'Updating...',
   not_started:     'Not started',
   no_compose_file: 'No compose file',
   no_dockerfile:   'No dockerfile',
@@ -166,6 +191,7 @@ const STATUS_LABEL = {
 
 const STATUS_DOT = {
   running:         'dot-running',
+  updating:        'dot-updating',
   not_started:     'dot-stopped',
   no_compose_file: 'dot-stopped',
   no_dockerfile:   'dot-stopped',
@@ -175,6 +201,7 @@ const STATUS_DOT = {
 };
 
 const STATUS_MSG = {
+  updating:        'This project is being updated — check back shortly.',
   no_compose_file: 'No docker-compose.yml found — add one and re-run setup.',
   no_dockerfile:   'No Dockerfile found — add one and re-run setup.',
   clone_failed:    'Git clone failed — check the URL in repos.json.',
@@ -203,22 +230,20 @@ function colorWithOpacity(hex, opacity) {
   return `rgba(${r},${g},${b},${opacity})`;
 }
 
-Promise.all([
-  fetch('/repos.json').then(r => r.ok ? r.json() : []).catch(() => []),
-  fetch('/projects.json').then(r => r.ok ? r.json() : []).catch(() => []),
-]).then(([repos, statuses]) => {
+function renderCards(repos, statuses) {
   const statusMap = Object.fromEntries(statuses.map(s => [s.name, s]));
-  const projects = repos.map(r => ({ ...r, status: 'not_started', ...(statusMap[r.name] || {}) }));
+  const projects  = repos.map(r => ({ ...r, status: 'not_started', ...(statusMap[r.name] || {}) }));
 
   const running = projects.filter(p => p.status === 'running').length;
   document.getElementById('subtitle').textContent =
     `${projects.length} projects · ${running} running`;
 
   const grid = document.getElementById('grid');
+  grid.innerHTML = '';
 
   for (const proj of projects) {
     const status = proj.status || 'not_started';
-    const color = proj.color || '#888';
+    const color  = proj.color || '#888';
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -245,6 +270,52 @@ Promise.all([
     });
 
     grid.appendChild(card);
+  }
+
+  return projects;
+}
+
+let repos = [];
+let pollInterval = null;
+
+function startPolling() {
+  if (pollInterval) return;
+  pollInterval = setInterval(async () => {
+    const [statuses, { running }] = await Promise.all([
+      fetch('/api/status').then(r => r.json()).catch(() => []),
+      fetch('/api/update/running').then(r => r.json()).catch(() => ({ running: false })),
+    ]);
+    renderCards(repos, statuses);
+    if (!running) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+      document.getElementById('update-btn').disabled = false;
+      document.getElementById('update-btn').textContent = 'Update All';
+    }
+  }, 2000);
+}
+
+async function triggerUpdate() {
+  const btn = document.getElementById('update-btn');
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+  await fetch('/api/update', { method: 'POST' }).catch(() => {});
+  startPolling();
+}
+
+// Initial load
+Promise.all([
+  fetch('/repos.json').then(r => r.ok ? r.json() : []).catch(() => []),
+  fetch('/api/status').then(r => r.ok ? r.json() : []).catch(() => []),
+  fetch('/api/update/running').then(r => r.ok ? r.json() : { running: false }).catch(() => ({ running: false })),
+]).then(([r, statuses, { running }]) => {
+  repos = r;
+  renderCards(repos, statuses);
+  if (running) {
+    const btn = document.getElementById('update-btn');
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+    startPolling();
   }
 });
 </script>
