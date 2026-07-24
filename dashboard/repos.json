@@ -40,5 +40,13 @@
     "git_url": "https://github.com/cole-ruehle/weather-app",
     "port": 3009,
     "color": "#34d399"
+  },
+  {
+    "name": "airline-simulator",
+    "label": "Airline Simulator",
+    "description": "Airline management and route simulation game",
+    "git_url": "https://github.com/cole-ruehle/airline-simulator",
+    "port": 3011,
+    "color": "#a855f7"
   }
 ]
