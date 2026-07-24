@@ -1,57 +1,101 @@
 # Docker Compose Guide for Dashboard Projects
 
-Each project's `docker-compose.yml` must follow these conventions to work with the dashboard setup.
+Each project's `docker-compose.yml` must follow these conventions to integrate with the dashboard.
 
-## Required: Frontend port
+## How it works
 
-The frontend service must use `${FRONTEND_PORT}` for its host port mapping. The dashboard injects this from `repos.json`.
+`update.py` reads `repos.json` and injects port values as environment variables when running `docker compose up`. Your compose file reads them via `${VAR_NAME}` syntax.
 
-```yaml
-web:
-  ports:
-    - "${FRONTEND_PORT:-3000}:3000"  # host:container — container always listens on 3000
-```
+## Port variables
 
-## Optional: Database port
+### `FRONTEND_PORT` — required
 
-If your project exposes a database to the host (for direct access/debugging), use `${DB_PORT}`.
+Every project must have a frontend service that uses `${FRONTEND_PORT}`. This is always injected from `repos.json` `"port"` field.
 
 ```yaml
-db:
-  ports:
-    - "${DB_PORT:-5432}:5432"
+services:
+  web:
+    build: .
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"  # left side = host port injected by dashboard
+                                        # right side = whatever port your container listens on
 ```
 
-Each project gets a unique `db_port` in `repos.json` to avoid conflicts.
+The container-side port (right of the colon) must match what your app actually serves on. Common values: `3000` (Node/Vite), `80` (nginx static), `8080`.
 
-## Do not use host volume mounts in services
+### `BACKEND_PORT` — if project has a separate API service
 
-Avoid `volumes: - .:/app` in any service. The code is already baked into the image and this path won't resolve when run via the dashboard setup container.
+Add `"backend_port"` to the project's entry in `repos.json`, then use `${BACKEND_PORT}` in compose:
 
 ```yaml
-# BAD
-api:
-  volumes:
-    - .:/app
-
-# GOOD — just remove it, the Dockerfile handles copying code
-api:
-  build: .
+services:
+  api:
+    build: .
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
 ```
 
-## Backend services stay internal
-
-Backend services (APIs, databases, workers) do not need host port exposure unless you want direct access. They communicate internally via Docker's network using the service name as hostname.
+The frontend service should pass this to the browser so it can reach the API:
 
 ```yaml
-api:
-  environment:
-    - DB_HOST=db  # refers to the db service by name, no port mapping needed
+  web:
+    environment:
+      - VITE_API_BASE_URL=http://localhost:${BACKEND_PORT:-8000}
 ```
+
+### `DB_PORT` — if project exposes a database to the host
+
+Add `"db_port"` to the project's entry in `repos.json`, then use `${DB_PORT}` in compose:
+
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "${DB_PORT:-5432}:5432"
+```
+
+This is only needed if you want direct host access to the DB (e.g. for debugging). Internal service-to-service connections don't need host port exposure — they use Docker's network and the service name as hostname:
+
+```yaml
+  api:
+    environment:
+      - DB_HOST=db      # the db service name, no port mapping needed
+      - DB_PORT=5432    # container-internal port, always 5432
+```
+
+## repos.json entry
+
+```json
+{
+  "name": "my-project",
+  "label": "My Project",
+  "description": "...",
+  "git_url": "https://github.com/you/my-project",
+  "port": 3011,
+  "backend_port": 8002,
+  "db_port": 5435,
+  "color": "#f97316"
+}
+```
+
+`backend_port` and `db_port` are optional — only include them if your project has those services.
 
 ## Summary
 
-| Variable | Set in repos.json | Used in compose |
-|---|---|---|
-| `FRONTEND_PORT` | `"port"` | `${FRONTEND_PORT:-3000}:3000` |
-| `DB_PORT` | `"db_port"` | `${DB_PORT:-5432}:5432` |
+| `repos.json` field | Env var injected   | Use in compose                        |
+|--------------------|--------------------|---------------------------------------|
+| `"port"`           | `FRONTEND_PORT`    | `${FRONTEND_PORT:-3000}:3000`         |
+| `"backend_port"`   | `BACKEND_PORT`     | `${BACKEND_PORT:-8000}:8000`          |
+| `"db_port"`        | `DB_PORT`          | `${DB_PORT:-5432}:5432`               |
+
+## Rules
+
+- **No host volume mounts** in any service. The code is baked into the image; path mounts won't resolve from the dashboard container.
+  ```yaml
+  # BAD
+  volumes:
+    - .:/app
+  ```
+- **Pick unique ports** across all projects. Check `repos.json` to avoid conflicts.
+- **Backend/DB services don't need host ports** unless you specifically want direct access — they communicate internally over Docker's network.
