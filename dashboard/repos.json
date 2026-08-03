@@ -49,5 +49,14 @@
     "git_url": "https://github.com/cole-ruehle/airline-simulator",
     "port": 3011,
     "color": "#a855f7"
+  },
+  {
+    "name": "cooking-reference",
+    "label": "Cooking Reference",
+    "description": "Simple cooking reference website",
+    "git_url": "https://github.com/cole-ruehle/cooking-reference",
+    "port": 3013,
+    "backend_port": 8003,
+    "color": "#f59e0b"
   }
 ]
