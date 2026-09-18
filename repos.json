@@ -58,5 +58,15 @@
     "port": 3013,
     "backend_port": 8003,
     "color": "#f59e0b"
+  },
+  {
+    "name": "financial-report-generator",
+    "label": "Financial Report Generator",
+    "description": "AI-powered financial report generation with interactive chat",
+    "git_url": "https://github.com/cole-ruehle/financial-report-generator",
+    "port": 3015,
+    "backend_port": 8005,
+    "db_port": 5435,
+    "color": "#10b981"
   }
 ]

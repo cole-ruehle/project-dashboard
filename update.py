@@ -19,6 +19,51 @@ DASHBOARD_JSON = os.path.join(os.path.dirname(__file__), "dashboard", "projects.
 COMPOSE_NAMES  = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
 
 
+DOPPLER_STATUS_FILE = os.path.join(os.path.dirname(__file__), "dashboard", "doppler_status.json")
+
+
+def fetch_doppler_secrets():
+    """Fetch shared secrets from Doppler. Returns (secrets_dict, status_dict)."""
+    token = os.environ.get("DOPPLER_TOKEN", "")
+    if not token:
+        status = {"ok": False, "message": "DOPPLER_TOKEN not set"}
+        _write_doppler_status(status)
+        print("  Doppler: no token configured")
+        return {}, status
+    try:
+        result = subprocess.run(
+            ["doppler", "secrets", "download", "--no-file", "--format", "json"],
+            capture_output=True, text=True,
+            env={**os.environ, "DOPPLER_TOKEN": token},
+        )
+        if result.returncode == 0:
+            secrets = json.loads(result.stdout)
+            status = {"ok": True, "message": f"Loaded {len(secrets)} secrets"}
+            _write_doppler_status(status)
+            print(f"  Doppler: loaded {len(secrets)} secrets")
+            return secrets, status
+        else:
+            status = {"ok": False, "message": f"CLI error: {result.stderr.strip()[:200]}"}
+            _write_doppler_status(status)
+            print(f"  Doppler: fetch failed — {result.stderr.strip()}")
+            return {}, status
+    except FileNotFoundError:
+        status = {"ok": False, "message": "Doppler CLI not installed"}
+        _write_doppler_status(status)
+        print("  Doppler: CLI not found")
+        return {}, status
+    except json.JSONDecodeError:
+        status = {"ok": False, "message": "Invalid JSON from Doppler CLI"}
+        _write_doppler_status(status)
+        print("  Doppler: bad response")
+        return {}, status
+
+
+def _write_doppler_status(status):
+    with open(DOPPLER_STATUS_FILE, "w") as f:
+        json.dump(status, f)
+
+
 def run(cmd, cwd=None, env=None):
     return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
 
@@ -69,6 +114,7 @@ def main():
     os.makedirs(PROJECTS_DIR, exist_ok=True)
 
     token    = os.environ.get("GITHUB_TOKEN", "")
+    doppler_secrets, _ = fetch_doppler_secrets()
     statuses = load_statuses()
 
     for repo in repos:
@@ -122,19 +168,31 @@ def main():
             write_statuses(statuses)
             continue
 
-        # Copy env
+        # Build project .env: Doppler (base) → local env file (override)
+        env_dst = os.path.join(project_dir, ".env")
+        project_env = dict(doppler_secrets)
         env_src = os.path.join(os.path.dirname(__file__), "envs", f"{name}.env")
         if os.path.isfile(env_src):
-            shutil.copy(env_src, os.path.join(project_dir, ".env"))
-            print(f"  Copied envs/{name}.env → .env")
+            with open(env_src) as ef:
+                for line in ef:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        project_env[k.strip()] = v.strip()
+            print(f"  Merged envs/{name}.env (overrides Doppler)")
+        if project_env:
+            with open(env_dst, "w") as ef:
+                for k, v in project_env.items():
+                    ef.write(f"{k}={v}\n")
+            print(f"  Wrote .env ({len(project_env)} vars)")
 
         # Bring down existing containers for this project only
         print("  Stopping existing containers...")
         stream(["docker-compose", "down"], cwd=project_dir)
 
-        # Build + start
+        # Build + start — ports injected as shell env (override everything)
         print("  Building and starting...")
-        env = {**os.environ, "FRONTEND_PORT": str(port)}
+        env = {**os.environ, **doppler_secrets, "FRONTEND_PORT": str(port)}
         if repo.get("db_port"):
             env["DB_PORT"] = str(repo["db_port"])
         if repo.get("backend_port"):

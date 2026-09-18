@@ -14,8 +14,9 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
-WORKSPACE      = "/workspace"
-DASHBOARD_JSON = os.path.join(WORKSPACE, "dashboard", "projects.json")
+WORKSPACE           = "/workspace"
+DASHBOARD_JSON      = os.path.join(WORKSPACE, "dashboard", "projects.json")
+DOPPLER_STATUS_FILE = os.path.join(WORKSPACE, "dashboard", "doppler_status.json")
 
 _lock    = threading.Lock()
 _running = False
@@ -36,6 +37,14 @@ def get_status():
         with open(DASHBOARD_JSON) as f:
             return json.load(f)
     return []
+
+
+@app.get("/api/doppler")
+def doppler_status():
+    if os.path.isfile(DOPPLER_STATUS_FILE):
+        with open(DOPPLER_STATUS_FILE) as f:
+            return json.load(f)
+    return {"ok": False, "message": "No status yet — run setup or update first"}
 
 
 @app.get("/api/update/running")

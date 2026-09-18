@@ -1,4 +1,5 @@
 FROM python:3.12-alpine
-RUN apk add --no-cache git docker-cli docker-compose
+RUN apk add --no-cache git docker-cli docker-compose curl gnupg && \
+    curl -sL https://cli.doppler.com/install.sh | sh
 WORKDIR /workspace
 CMD ["python3", "setup.py"]

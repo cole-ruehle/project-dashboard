@@ -195,6 +195,42 @@
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+
+  .doppler-warning {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-radius: 12px;
+    padding: 12px 16px;
+    max-width: 300px;
+    font-size: 12px;
+    color: #92400e;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    z-index: 100;
+    display: none;
+  }
+
+  .doppler-warning strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: #78350f;
+  }
+
+  .doppler-warning .dismiss {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: #92400e;
+    cursor: pointer;
+    line-height: 1;
+  }
 </style>
 </head>
 <body>
@@ -207,6 +243,11 @@
 
 <div id="grid"></div>
 <div class="toast" id="toast"></div>
+<div class="doppler-warning" id="doppler-warning">
+  <button class="dismiss" onclick="this.parentElement.style.display='none'">&times;</button>
+  <strong>Doppler not active</strong>
+  <span id="doppler-msg">Secrets are not being pulled from Doppler.</span>
+</div>
 
 <script>
 const host = window.location.hostname;
@@ -366,6 +407,18 @@ async function triggerUpdate() {
   startPolling();
 }
 
+function checkDoppler() {
+  fetch('/api/doppler').then(r => r.json()).then(status => {
+    const el = document.getElementById('doppler-warning');
+    if (!status.ok) {
+      document.getElementById('doppler-msg').textContent = status.message;
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  }).catch(() => {});
+}
+
 Promise.all([
   fetch('/repos.json').then(r => r.ok ? r.json() : []).catch(() => []),
   fetch('/api/status').then(r => r.ok ? r.json() : []).catch(() => []),
@@ -373,6 +426,7 @@ Promise.all([
 ]).then(([r, statuses, { running }]) => {
   repos = r;
   renderCards(repos, statuses);
+  checkDoppler();
   if (running) {
     const btn = document.getElementById('update-btn');
     btn.disabled = true;
