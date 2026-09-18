@@ -6,6 +6,8 @@ Each project's `docker-compose.yml` must follow these conventions to integrate w
 
 `update.py` reads `repos.json` and injects port values as environment variables when running `docker compose up`. Your compose file reads them via `${VAR_NAME}` syntax.
 
+Shared secrets from Doppler are also injected automatically. They're written to a `.env` file in each project directory and passed as shell env vars to `docker compose up`. But **secrets in `.env` are not automatically available inside containers** — you must explicitly pass them through in your compose file (see [Secrets / Doppler](#secrets--doppler) below).
+
 ## Port variables
 
 ### `FRONTEND_PORT` — required
@@ -63,6 +65,66 @@ This is only needed if you want direct host access to the DB (e.g. for debugging
       - DB_HOST=db      # the db service name, no port mapping needed
       - DB_PORT=5432    # container-internal port, always 5432
 ```
+
+## Secrets / Doppler
+
+The dashboard fetches shared secrets from Doppler and writes them to each project's `.env` file. However, Docker Compose does **not** automatically pass `.env` variables into containers. You must do one of:
+
+### Option A: `env_file` (recommended for API services)
+
+Pass the entire `.env` into a service:
+
+```yaml
+services:
+  api:
+    build: .
+    env_file:
+      - .env    # all Doppler secrets + local overrides available inside container
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+```
+
+### Option B: explicit `environment` (when you only need specific vars)
+
+Cherry-pick individual secrets:
+
+```yaml
+services:
+  api:
+    build: .
+    environment:
+      - META_API_KEY=${META_API_KEY:-}
+      - SOME_OTHER_SECRET=${SOME_OTHER_SECRET:-}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+```
+
+### Option C: build args (for frontend builds that bake values at build time)
+
+```yaml
+services:
+  web:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8000}
+```
+
+### What NOT to do
+
+```yaml
+services:
+  api:
+    build: .
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    # No env_file or environment — secrets from Doppler are NOT available
+    # inside this container even though they're in .env on the host
+```
+
+### Local overrides
+
+If a project needs a secret that differs from Doppler (or a project-only secret), add it to `envs/<project-name>.env` in the dashboard repo. Local env files always override Doppler values.
 
 ## repos.json entry
 
