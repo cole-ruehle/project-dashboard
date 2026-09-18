@@ -38,6 +38,10 @@ def _run_self_update():
     try:
         _self_update_status = {"status": "pulling"}
 
+        # Ensure git trusts the workspace directory (owned by host user, container runs as root)
+        subprocess.run(["git", "config", "--global", "--add", "safe.directory", WORKSPACE],
+                       capture_output=True, text=True)
+
         # Git pull
         result = subprocess.run(["git", "pull"], cwd=WORKSPACE, capture_output=True, text=True)
         if result.returncode != 0:
