@@ -32,11 +32,15 @@
     color: #86868b;
   }
 
-  #update-btn {
+  .header-btns {
     margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .header-btn {
     padding: 9px 22px;
-    background: #1d1d1f;
-    color: #fff;
     border: none;
     border-radius: 20px;
     font-size: 13px;
@@ -45,9 +49,19 @@
     transition: opacity 0.15s;
   }
 
-  #update-btn:disabled {
+  .header-btn:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+
+  #update-btn {
+    background: #1d1d1f;
+    color: #fff;
+  }
+
+  #self-update-btn {
+    background: #e5e5ea;
+    color: #1d1d1f;
   }
 
   #grid {
@@ -238,7 +252,10 @@
 <header>
   <h1>Projects</h1>
   <p id="subtitle">Loading...</p>
-  <button id="update-btn" onclick="triggerUpdate()">Update All</button>
+  <div class="header-btns">
+    <button class="header-btn" id="update-btn" onclick="triggerUpdate()">Update All</button>
+    <button class="header-btn" id="self-update-btn" onclick="triggerSelfUpdate()">Update Dashboard</button>
+  </div>
 </header>
 
 <div id="grid"></div>
@@ -405,6 +422,35 @@ async function triggerUpdate() {
   btn.textContent = 'Updating...';
   await fetch('/api/update', { method: 'POST' }).catch(() => {});
   startPolling();
+}
+
+let selfUpdatePoll = null;
+
+async function triggerSelfUpdate() {
+  const btn = document.getElementById('self-update-btn');
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+  await fetch('/api/self-update', { method: 'POST' }).catch(() => {});
+
+  if (selfUpdatePoll) clearInterval(selfUpdatePoll);
+  selfUpdatePoll = setInterval(async () => {
+    const s = await fetch('/api/self-update/status').then(r => r.json()).catch(() => ({ running: false }));
+    if (s.status === 'pulling') btn.textContent = 'Pulling...';
+    else if (s.status === 'pruning') btn.textContent = 'Pruning...';
+    else if (s.status === 'rebuilding') btn.textContent = 'Rebuilding...';
+
+    if (!s.running) {
+      clearInterval(selfUpdatePoll);
+      selfUpdatePoll = null;
+      btn.disabled = false;
+      btn.textContent = 'Update Dashboard';
+      showToast(s.message || 'Dashboard updated');
+      // Reload to pick up any HTML/JS changes
+      if (s.status === 'done') {
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    }
+  }, 1500);
 }
 
 function checkDoppler() {

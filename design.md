@@ -61,6 +61,6 @@ graph TD
 
 1. `docker-compose up` starts **setup** (one-shot), **api**, and **dashboard** containers.
 2. **setup.py** clones each repo in `repos.json`, fetches shared secrets from Doppler (if `DOPPLER_TOKEN` set), merges with `envs/<name>.env` (local overrides Doppler), runs `docker-compose up -d --build` in each project dir with configured ports, writes status to `dashboard/projects.json`.
-3. **api.py** exposes `/api/status` (reads `projects.json`) and `/api/update` (runs `update.py` in background).
+3. **api.py** exposes `/api/status` (reads `projects.json`), `/api/update` (runs `update.py` in background), and `/api/self-update` (git pulls the dashboard repo, prunes Docker cache, rebuilds containers if Dockerfiles changed).
 4. **nginx** serves `dashboard/index.html` + `repos.json` and proxies `/api/` to the api container.
 5. **update.py** fetches each remote, skips unchanged repos, rebuilds only what changed.
