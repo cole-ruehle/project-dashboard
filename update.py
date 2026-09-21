@@ -60,8 +60,12 @@ def fetch_doppler_secrets():
 
 
 def _write_doppler_status(status):
-    with open(DOPPLER_STATUS_FILE, "w") as f:
-        json.dump(status, f)
+    try:
+        with open(DOPPLER_STATUS_FILE, "w") as f:
+            json.dump(status, f)
+    except PermissionError:
+        print(f"  Warning: could not write {DOPPLER_STATUS_FILE} (permission denied)")
+
 
 
 def run(cmd, cwd=None, env=None):
