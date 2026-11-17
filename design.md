@@ -31,6 +31,7 @@ graph TD
         P6["airline-simulator\nweb :3011"]
         P7["cooking-reference\nweb :3013 · api :8003"]
         P8["financial-report-generator\nweb :3015 · api :8005 · db :5435"]
+        P9["workout-site\nweb :3017 · api :8007 · db :5436"]
     end
 
     Browser -->|"direct :300x"| Projects
@@ -56,11 +57,14 @@ graph TD
 | Financial Report Generator frontend | 3015 |
 | Financial Report Generator backend | 8005 |
 | Financial Report Generator db | 5435 |
+| Gym Tracker frontend | 3017 |
+| Gym Tracker backend | 8007 |
+| Gym Tracker db | 5436 |
 
 ## Data Flow
 
 1. `docker-compose up` starts **setup** (one-shot), **api**, and **dashboard** containers.
 2. **setup.py** clones each repo in `repos.json`, fetches shared secrets from Doppler (if `DOPPLER_TOKEN` set), merges with `envs/<name>.env` (local overrides Doppler), runs `docker-compose up -d --build` in each project dir with configured ports, writes status to `dashboard/projects.json`.
 3. **api.py** exposes `/api/status` (reads `projects.json`), `/api/update` (runs `update.py` in background), and `/api/self-update` (git pulls the dashboard repo, prunes Docker cache, rebuilds containers if Dockerfiles changed).
-4. **nginx** serves `dashboard/index.html` + `repos.json` and proxies `/api/` to the api container.
+4. **nginx** serves `dashboard/index.html` + `repos.json` (read from a read-only mount of the repo root, so `git pull` changes show up immediately) and proxies `/api/` to the api container.
 5. **update.py** fetches each remote, skips unchanged repos, rebuilds only what changed.
