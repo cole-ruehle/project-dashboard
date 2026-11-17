@@ -17,6 +17,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: dashboard-api
+    init: true
     restart: unless-stopped
     env_file:
       - .env
