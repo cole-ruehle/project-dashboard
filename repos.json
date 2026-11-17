@@ -10,6 +10,16 @@
     "color": "#f97316"
   },
   {
+    "name": "workout-site",
+    "label": "Gym Tracker",
+    "description": "Log workouts and track lifting progress",
+    "git_url": "https://github.com/cole-ruehle/workout-site",
+    "port": 3017,
+    "backend_port": 8007,
+    "db_port": 5436,
+    "color": "#ef4444"
+  },
+  {
     "name": "prediction-market",
     "label": "Prediction Market",
     "description": "Browse and trade on prediction market outcomes",
