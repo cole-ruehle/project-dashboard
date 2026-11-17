@@ -147,7 +147,8 @@ def main():
             prev_status = statuses.get(name, {}).get("status", "")
             print("  Checking for remote changes...")
             needs_build = has_remote_changes(project_dir, auth_url)
-            if not needs_build and prev_status in ("build_failed", "clone_failed", "run_failed"):
+            # "updating" at the start of a run means a previous run died mid-build
+            if not needs_build and prev_status in ("build_failed", "clone_failed", "run_failed", "updating"):
                 print(f"  No changes but previous status was {prev_status} — retrying")
                 needs_build = True
             elif needs_build:
